@@ -6,6 +6,7 @@ from typing import IO, TYPE_CHECKING, Any, Union
 
 from .dict import model_from_dict, model_to_dict
 
+
 if TYPE_CHECKING:
     from cobra import Model
 
