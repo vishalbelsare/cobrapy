@@ -1,5 +1,7 @@
 """Test functionalities of boundary type detection functions."""
 
+import logging
+
 import pytest
 
 from cobra.core import Metabolite, Model, Reaction
@@ -38,6 +40,19 @@ def test_find_external_compartment_multi(model: Model) -> None:
     # Now fails because same boundary count
     with pytest.raises(RuntimeError):
         find_external_compartment(model)
+
+
+@pytest.mark.parametrize("compartment", ["C_e", "e0"])
+def test_find_external_popular_reconstructions(
+    model: Model, compartment, caplog
+) -> None:
+    """Test some additional id formats."""
+    for ex in model.exchanges:
+        ex.reactants[0].compartment = compartment
+    with caplog.at_level(logging.WARNING):
+        external = find_external_compartment(model)
+    assert external == compartment
+    assert "complete nonsense" not in caplog.text
 
 
 def test_no_names_or_boundary_reactions(empty_model: Model) -> None:
