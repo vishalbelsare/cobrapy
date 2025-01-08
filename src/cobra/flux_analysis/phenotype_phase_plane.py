@@ -81,9 +81,9 @@ def production_envelope(
 
     Examples
     --------
-    >>> import cobra.test
+    >>> import cobra.io
     >>> from cobra.flux_analysis import production_envelope
-    >>> model = cobra.test.create_test_model("textbook")
+    >>> model = cobra.io.load_model("textbook")
     >>> production_envelope(model, ["EX_glc__D_e", "EX_o2_e"])
         carbon_source  flux_minimum  carbon_yield_minimum  mass_yield_minimum ...
     0     EX_glc__D_e           0.0                   0.0                 NaN ...
@@ -103,7 +103,7 @@ def production_envelope(
     """
     reactions = model.reactions.get_by_any(reactions)
     objective = model.solver.objective if objective is None else objective
-    data = dict()
+    data = {}
 
     if carbon_sources is None:
         c_input = _find_carbon_sources(model)

@@ -1,8 +1,7 @@
 """Provide the base class and utility function for gap filling."""
 
-
 import logging
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 from optlang.interface import OPTIMAL
 from optlang.symbolics import Zero
@@ -107,7 +106,7 @@ class GapFiller:
         model: Model,
         universal: Optional[Model] = None,
         lower_bound: float = 0.05,
-        penalties: Optional[Dict[str, "Reaction"]] = None,
+        penalties: Optional[Union[Dict[str, int], Dict["Reaction", int]]] = None,
         exchange_reactions: bool = False,
         demand_reactions: bool = True,
         integer_threshold: float = 1e-6,
@@ -136,7 +135,7 @@ class GapFiller:
         #  threshold when it is not supported by the chosen solver.
         self.integer_threshold = integer_threshold
         self.universal = universal.copy() if universal else Model("universal")
-        self.penalties = dict(universal=1, exchange=100, demand=1)
+        self.penalties = {"universal": 1, "exchange": 100, "demand": 1}
         if penalties is not None:
             self.penalties.update(penalties)
         self.indicators = []
@@ -385,10 +384,10 @@ def gapfill(
 
     Examples
     --------
-    >>> import cobra.test as ct
+    >>> from cobra.io import load_model
     >>> from cobra import Model
     >>> from cobra.flux_analysis import gapfill
-    >>> model = ct.create_test_model("salmonella")
+    >>> model = load_model("iYS1720")
     >>> universal = Model("universal")
     >>> universal.add_reactions([model.reactions.GF6PTA.copy()])
     >>> model.remove_reactions([model.reactions.GF6PTA])

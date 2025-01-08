@@ -1,10 +1,9 @@
 """Provide a process pool with enhanced performance on Windows."""
 
-
 import multiprocessing
 import os
 import pickle
-from os.path import isfile
+from pathlib import Path
 from platform import system
 from tempfile import mkstemp
 from types import TracebackType
@@ -30,7 +29,7 @@ class ProcessPool:
         initializer: Optional[Callable] = None,
         initargs: Tuple = (),
         maxtasksperchild: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         Initialize a process pool.
@@ -79,8 +78,14 @@ class ProcessPool:
         exc_tb: Optional[TracebackType],
     ) -> Optional[bool]:
         """Clean up resources when leaving a context."""
+        # The `multiprocessing.Pool.__exit__` only terminates pool processes. For a
+        # clean exit, we close the pool and join the pool processes first.
+        try:
+            self._pool.close()
+            self._pool.join()
+        finally:
+            self._clean_up()
         result = self._pool.__exit__(exc_type, exc_val, exc_tb)
-        self._clean_up()
         return result
 
     def close(self) -> None:
@@ -98,5 +103,5 @@ class ProcessPool:
 
     def _clean_up(self) -> None:
         """Remove the dump file if it exists."""
-        if self._filename is not None and isfile(self._filename):
-            os.remove(self._filename)
+        if self._filename is not None and Path(self._filename).exists():
+            Path(self._filename).unlink()

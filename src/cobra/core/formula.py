@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
-
-from __future__ import absolute_import
+"""Provide a class representing a chemical formula."""
 
 import re
+from typing import Optional, Union
 from warnings import warn
 
-from cobra.core.object import Object
+from .object import Object
 
 
 # Numbers are not required because of the |(?=[A-Z])? block. See the
@@ -15,7 +14,7 @@ element_re = re.compile("([A-Z][a-z]?)([0-9.]+[0-9.]?|(?=[A-Z])?)")
 
 
 class Formula(Object):
-    """Describes a Chemical Formula
+    """Describe a chemical formula.
 
     Parameters
     ---------
@@ -23,14 +22,21 @@ class Formula(Object):
         A legal formula string contains only letters and numbers.
     """
 
-    def __init__(self, formula=None):
-        Object.__init__(self, formula)
+    def __init__(self, formula: Optional[str] = None, **kwargs) -> None:
+        """Initialize a formula.
+
+        Parameters
+        ----------
+        formula: str, optional
+            An string that will be parsed as a formula.
+        """
+        super().__init__(id=formula, **kwargs)
         self.formula = formula
         self.elements = {}
         if self.formula is not None:
             self.parse_composition()
 
-    def __add__(self, other_formula):
+    def __add__(self, other_formula: Union["Formula", str]) -> "Formula":
         """Combine two molecular formulas.
 
         Parameters
@@ -40,24 +46,24 @@ class Formula(Object):
 
         Returns
         -------
-        Formula
+        Formula: Formula
            The combined formula
         """
         return Formula(self.formula + other_formula.formula)
 
-    def parse_composition(self):
-        """Breaks the chemical formula down by element."""
+    def parse_composition(self) -> None:
+        """Break the chemical formula down by element."""
         tmp_formula = self.formula
         # commonly occuring characters in incorrectly constructed formulas
         if "*" in tmp_formula:
-            warn("invalid character '*' found in formula '%s'" % self.formula)
+            warn(f"invalid character '*' found in formula '{self.formula}'")
             tmp_formula = self.formula.replace("*", "")
         if "(" in tmp_formula or ")" in tmp_formula:
-            warn("parenthesis found in formula '%s'" % self.formula)
+            warn(f"parenthesis found in formula '{self.formula}'")
             return
         composition = {}
         parsed = element_re.findall(tmp_formula)
-        for (element, count) in parsed:
+        for element, count in parsed:
             if count == "":
                 count = 1
             else:
@@ -67,12 +73,9 @@ class Formula(Object):
                     if count == int_count:
                         count = int_count
                     else:
-                        warn(
-                            "%s is not an integer (in formula %s)"
-                            % (count, self.formula)
-                        )
+                        warn(f"{count} is not an integer (in formula {self.formula})")
                 except ValueError:
-                    warn("failed to parse %s (in formula %s)" % (count, self.formula))
+                    warn(f"failed to parse {count} (in formula {self.formula})")
                     self.elements = {}
                     return
             if element in composition:
@@ -82,8 +85,8 @@ class Formula(Object):
         self.elements = composition
 
     @property
-    def weight(self):
-        """Calculate the mol mass of the compound
+    def weight(self) -> float:
+        """Calculate the mol mass of the compound.
 
         Returns
         -------
@@ -98,7 +101,7 @@ class Formula(Object):
                 ]
             )
         except KeyError as e:
-            warn("The element %s does not appear in the periodic table" % e)
+            warn(f"The element {e} does not appear in the periodic table")
 
 
 elements_and_molecular_weights = {

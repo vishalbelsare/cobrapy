@@ -1,11 +1,11 @@
 """Provide functions to modify model components."""
 
 from ast import NodeTransformer
+from functools import partial
 from itertools import chain
 from typing import TYPE_CHECKING, Dict
 
-from ..core.gene import ast2str
-from .delete import get_compiled_gene_reaction_rules
+from cobra.util import get_context
 
 
 if TYPE_CHECKING:
@@ -87,11 +87,11 @@ def escape_ID(model: "Model") -> None:
     """
     for x in chain([model], model.metabolites, model.reactions, model.genes):
         x.id = _escape_str_id(x.id)
-    model.repair()
     gene_renamer = _GeneEscaper()
-    for rxn, rule in get_compiled_gene_reaction_rules(model).items():
-        if rule is not None:
-            rxn._gene_reaction_rule = ast2str(gene_renamer.visit(rule))
+    for rxn in model.reactions:
+        if rxn.gpr is not None:
+            gene_renamer.visit(rxn.gpr)
+    model.repair()
 
 
 class _Renamer(NodeTransformer):
@@ -118,6 +118,7 @@ class _Renamer(NodeTransformer):
         super().__init__(**kwargs)
         self.rename_dict = rename_dict
 
+    # That's not right
     def visit_Name(self, node: "Gene") -> "Gene":
         """Rename a gene.
 
@@ -149,44 +150,51 @@ def rename_genes(model: "Model", rename_dict: Dict[str, str]) -> None:
 
     """
     recompute_reactions = set()  # need to recompute related genes
-    remove_genes = []
+    remove_genes = set()
+    context = get_context(model)
+
+    # Needs to be added first since the history is executed from the tail and
+    # this has to be run last to repair the Gene <-> Reaction mapping
+    if context:
+        for rxn in model.reactions:
+            context(partial(rxn.update_genes_from_gpr))
+
     for old_name, new_name in rename_dict.items():
         # undefined if there a value matches a different key
         try:
             gene_index = model.genes.index(old_name)
         except ValueError:
-            gene_index = None
-        old_gene_present = gene_index is not None
+            continue
         new_gene_present = new_name in model.genes
-        if old_gene_present and new_gene_present:
+        if new_gene_present:
             old_gene = model.genes.get_by_id(old_name)
             # Added in case not renaming some genes:
             if old_gene is not model.genes.get_by_id(new_name):
-                remove_genes.append(old_gene)
-                recompute_reactions.update(old_gene._reaction)
-        elif old_gene_present and not new_gene_present:
+                remove_genes.add(old_gene)
+                recompute_reactions.update(old_gene.reactions)
+        else:
             # rename old gene to new gene
             gene = model.genes[gene_index]
-            # trick DictList into updating index
-            model.genes._dict.pop(gene.id)  # ugh
             gene.id = new_name
-            model.genes[gene_index] = gene
-        elif not old_gene_present and new_gene_present:
-            pass
-        else:  # if not old gene_present and not new_gene_present
-            # the new gene's _model will be set by repair
-            # This would add genes from rename_dict
-            # that are not associated with a rxn
-            # cobra_model.genes.append(Gene(new_name))
-            pass
-    model.repair()
+            model.genes._generate_index()
+            recompute_reactions.update(gene.reactions)
+            if context:
+                context(model.genes._generate_index)
+                context(partial(setattr, gene, "id", old_name))
 
     gene_renamer = _Renamer(rename_dict)
-    for rxn, rule in get_compiled_gene_reaction_rules(model).items():
-        if rule is not None:
-            rxn._gene_reaction_rule = ast2str(gene_renamer.visit(rule))
-
     for rxn in recompute_reactions:
-        rxn.gene_reaction_rule = rxn._gene_reaction_rule
+        if rxn.gpr is not None:
+            old_gpr = rxn.gpr.copy()
+            gene_renamer.visit(rxn.gpr)
+            if context:
+                context(partial(setattr, rxn, "_gpr", old_gpr))
+
+    model.repair()
+
     for i in remove_genes:
         model.genes.remove(i)
+        i._model = None
+        if context:
+            context(partial(model.genes.add, i))
+            context(partial(setattr, i, "_model", model))
